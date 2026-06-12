@@ -150,11 +150,13 @@ TransactionData::summarize_outputs(uint64_t min_value) const {
   (void)min_value;
   uint64_t total_satoshi = 0;
   std::size_t valid_outputs_count = 0;
-  while (total_satoshi < 1000000000 && valid_outputs_count < this->outputs.size()) {
-    if (this->outputs[valid_outputs_count].first >= min_value) {
-      total_satoshi += this->outputs[valid_outputs_count].first;
+  std::size_t outputs_count = 0;
+  while (total_satoshi < 1000000000 && outputs_count < this->outputs.size()) {
+    if (this->outputs[outputs_count].first >= min_value) {
+      total_satoshi += this->outputs[outputs_count].first;
+      ++valid_outputs_count;
     }
-    valid_outputs_count++;
+    ++outputs_count;
   }
   return {total_satoshi, valid_outputs_count};
 }
@@ -242,7 +244,7 @@ std::set<UTXO> UTXOSet::find_sufficient_utxos(uint64_t target_amount) const {
       return sufficient_utxos;
     }
   }
-  return sufficient_utxos;
+  return {};
 }
 
 std::size_t UTXOSet::get_total_utxo_count() const {
