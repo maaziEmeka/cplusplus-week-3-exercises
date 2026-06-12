@@ -285,14 +285,26 @@ void generate_block_headers(
     const std::string &prev_block_hash, const std::string &merkle_root,
     uint32_t timestamp, uint32_t bits, uint32_t start_nonce,
     uint32_t max_attempts,
-    const std::function<bool(const BlockHeader&)>& on_header) {
-    // TODO: starting from `start_nonce`, build a BlockHeader for each nonce and call on_header(header). Stop early if on_header returns false.
-    //       Otherwise stop after `max_attempts` attempts.
-    (void)prev_block_hash;
-    (void)merkle_root;
-    (void)timestamp;
-    (void)bits;
-    (void)start_nonce;
-    (void)max_attempts;
-    (void)on_header;
+    const std::function<bool(const BlockHeader &)> &on_header) {
+  // TODO: starting from `start_nonce`, build a BlockHeader for each nonce and
+  // call on_header(header). Stop early if on_header returns false.
+  //       Otherwise stop after `max_attempts` attempts.
+  (void)prev_block_hash;
+  (void)merkle_root;
+  (void)timestamp;
+  (void)bits;
+  (void)start_nonce;
+  (void)max_attempts;
+  (void)on_header;
+  while (max_attempts--) {
+    BlockHeader header;
+    header.prev_block_hash = prev_block_hash;
+    header.merkle_root = merkle_root;
+    header.timestamp = timestamp;
+    header.bits = bits;
+    header.nonce = start_nonce++;
+    if (!on_header(header)) {
+      return;
+    }
+  }
 }
