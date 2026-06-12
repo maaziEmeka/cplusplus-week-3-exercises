@@ -25,22 +25,87 @@ bool UTXO::operator==(const UTXO& other) const {
 // ---- Exercises --------------------------------------------------------------
 
 std::vector<uint8_t> CompactSizeEncoder::encode(uint64_t value) {
-    // TODO: encode `value` into Bitcoin CompactSize bytes.
-    //   value < 0xFD          -> single byte
-    //   value <= 0xFFFF       -> 0xFD prefix + 2 little-endian bytes
-    //   value <= 0xFFFFFFFF   -> 0xFE prefix + 4 little-endian bytes
-    //   otherwise             -> 0xFF prefix + 8 little-endian bytes
-    (void)value;
-    return {};
+  // TODO: encode `value` into Bitcoin CompactSize bytes.
+  //   value < 0xFD          -> single byte
+  //   value <= 0xFFFF       -> 0xFD prefix + 2 little-endian bytes
+  //   value <= 0xFFFFFFFF   -> 0xFE prefix + 4 little-endian bytes
+  //   otherwise             -> 0xFF prefix + 8 little-endian bytes
+  (void)value;
+
+  std::vector<uint8_t> result;
+
+  if (value < 0xFD) {
+    result.push_back(static_cast<uint8_t>(value));
+  } else if (value <= 0xFFFF) {
+    result.push_back(0xFD);
+    result.push_back(static_cast<uint8_t>(value & 0xFF));
+    result.push_back(static_cast<uint8_t>(value >> 8));
+  } else if (value <= 0xFFFFFFFF) {
+    result.push_back(0xFE);
+    result.push_back(static_cast<uint8_t>(value & 0xFF) & 0xFF);
+    result.push_back(static_cast<uint8_t>(value >> 8) & 0xFF);
+    result.push_back(static_cast<uint8_t>(value >> 16) & 0xFF);
+    result.push_back(static_cast<uint8_t>(value >> 24) & 0xFF);
+  } else {
+    result.push_back(0xFF);
+    result.push_back(static_cast<uint8_t>(value & 0xFF) & 0xFF);
+    result.push_back(static_cast<uint8_t>(value >> 8) & 0xFF);
+    result.push_back(static_cast<uint8_t>(value >> 16) & 0xFF);
+    result.push_back(static_cast<uint8_t>(value >> 24) & 0xFF);
+    result.push_back(static_cast<uint8_t>(value >> 32) & 0xFF);
+    result.push_back(static_cast<uint8_t>(value >> 40) & 0xFF);
+    result.push_back(static_cast<uint8_t>(value >> 48) & 0xFF);
+    result.push_back(static_cast<uint8_t>(value >> 56) & 0xFF);
+  }
+
+  return result;
 }
 
-std::optional<std::pair<uint64_t, std::size_t>> CompactSizeDecoder::decode(
-    const std::vector<uint8_t>& data) {
-    // TODO: decode a CompactSize integer from the front of `data`.
-    // Return std::nullopt if `data` is empty or shorter than the prefix
-    // demands. On success return {value, bytes_consumed}.
-    (void)data;
+std::optional<std::pair<uint64_t, std::size_t>>
+CompactSizeDecoder::decode(const std::vector<uint8_t> &data) {
+  // TODO: decode a CompactSize integer from the front of `data`.
+  // Return std::nullopt if `data` is empty or shorter than the prefix
+  // demands. On success return {value, bytes_consumed}.
+  (void)data;
+  if (data.empty()) {
     return std::nullopt;
+  }
+  uint8_t prefix = data[0];
+  std::size_t bytes_consumed = 0;
+  uint64_t value = 0;
+  if (prefix < 0xFD) {
+    value = prefix;
+    bytes_consumed = 1;
+  } else if (prefix == 0xFD) {
+    if (data.size() < 3)
+      return std::nullopt;
+    value = data[1] | (static_cast<uint64_t>(data[2]) << 8);
+    bytes_consumed = 3;
+  } else if (prefix == 0xFE) {
+    if (data.size() < 5) {
+      return std::nullopt;
+    }
+    value = data[1] | (static_cast<uint64_t>(data[2]) << 8) |
+            (static_cast<uint64_t>(data[3]) << 16) |
+            (static_cast<uint64_t>(data[4]) << 24);
+    bytes_consumed = 5;
+  } else if (prefix == 0xFF) {
+    if (data.size() < 9) {
+      return std::nullopt;
+    }
+    value = data[1] | (static_cast<uint64_t>(data[2]) << 8) |
+            (static_cast<uint64_t>(data[3]) << 16) |
+            (static_cast<uint64_t>(data[4]) << 24) |
+            (static_cast<uint64_t>(data[5]) << 32) |
+            (static_cast<uint64_t>(data[6]) << 40) |
+            (static_cast<uint64_t>(data[7]) << 48) |
+            (static_cast<uint64_t>(data[8]) << 56);
+    bytes_consumed = 9;
+  } else {
+    return std::nullopt;
+  }
+
+  return std::make_pair(value, bytes_consumed);
 }
 
 // ---- TransactionData --------------------------------------------------------
@@ -57,129 +122,166 @@ void TransactionData::add_input(const std::string& tx_id,
     (void)vout_index;
     (void)script_sig;
     (void)sequence;
+    TxInput tx_input{tx_id, vout_index, script_sig, sequence};
+    this->inputs.push_back(tx_input);
 }
 
 void TransactionData::add_output(uint64_t value_satoshi,
-                                 const std::string& script_pubkey) {
-    // TODO: append value_satoshi and script_pubkey to `outputs`.
-    (void)value_satoshi;
-    (void)script_pubkey;
+                                 const std::string &script_pubkey) {
+  // TODO: append value_satoshi and script_pubkey to `outputs`.
+  (void)value_satoshi;
+  (void)script_pubkey;
+  std::vector<std::pair<uint64_t, std::string>>::value_type output{value_satoshi, script_pubkey};
+  this->outputs.push_back(output);
 }
 
 std::vector<TxInput> TransactionData::get_input_details() const {
-    // TODO: iterate over `inputs` and return a copy of each entry.
-    return {};
+  // TODO: iterate over `inputs` and return a copy of each entry.
+  return this->inputs;
 }
 
-std::pair<uint64_t, std::size_t> TransactionData::summarize_outputs(
-    uint64_t min_value) const {
-    // TODO: walk `outputs` with a while loop, summing values that are >= min_value.
-    //       Skip (continue) outputs below min_value.
-    //       Break out of the loop as soon as the running total exceeds
-    //       1,000,000,000 satoshis. Return {total_satoshi, valid_outputs_count}.
-    (void)min_value;
-    return {0, 0};
+std::pair<uint64_t, std::size_t>
+TransactionData::summarize_outputs(uint64_t min_value) const {
+  // TODO: walk `outputs` with a while loop, summing values that are >=
+  // min_value.
+  //       Skip (continue) outputs below min_value.
+  //       Break out of the loop as soon as the running total exceeds
+  //       1,000,000,000 satoshis. Return {total_satoshi, valid_outputs_count}.
+  (void)min_value;
+  uint64_t total_satoshi = 0;
+  std::size_t valid_outputs_count = 0;
+  while (total_satoshi < 1000000000 && valid_outputs_count < this->outputs.size()) {
+    if (this->outputs[valid_outputs_count].first >= min_value) {
+      total_satoshi += this->outputs[valid_outputs_count].first;
+    }
+    valid_outputs_count++;
+  }
+  return {total_satoshi, valid_outputs_count};
 }
 
 void TransactionData::update_metadata(
-    const std::unordered_map<std::string, std::string>& new_data) {
-    // TODO: merge `new_data` into `metadata`, overwriting existing keys.
-    (void)new_data;
+    const std::unordered_map<std::string, std::string> &new_data) {
+  // TODO: merge `new_data` into `metadata`, overwriting existing keys.
+  (void)new_data;
+  for (const auto &[key, value] : new_data) {
+    this->metadata[key] = value;
+  }
 }
 
-std::string TransactionData::get_metadata_value(
-    const std::string& key, const std::string& default_value) const {
-    // TODO: return metadata[key] if present, otherwise `default_value`.
-    (void)key;
-    return default_value;
+std::string
+TransactionData::get_metadata_value(const std::string &key,
+                                    const std::string &default_value) const {
+  // TODO: return metadata[key] if present, otherwise `default_value`.
+  (void)key;
+  auto it = this->metadata.find(key);
+  return it != this->metadata.end() ? it->second : default_value;
 }
 
 std::tuple<uint32_t, std::size_t, std::size_t, uint32_t>
 TransactionData::get_transaction_header() const {
-    // TODO: return the version, inputs.size(), outputs.size(), and lock_time.
-    return {0, 0, 0, 0};
+  // TODO: return the version, inputs.size(), outputs.size(), and lock_time.
+  return {this->version, this->inputs.size(), this->outputs.size(), this->lock_time};
 }
 
 void TransactionData::set_transaction_header(uint32_t new_version,
                                              std::size_t num_inputs,
                                              std::size_t num_outputs,
                                              uint32_t new_lock_time) {
-    // TODO: update `version` and `lock_time`. Ignore num_inputs/num_outputs.
-    //       Hint: practice structured bindings or std::tie with `_` placeholders.
-    (void)new_version;
-    (void)num_inputs;
-    (void)num_outputs;
-    (void)new_lock_time;
+  // TODO: update `version` and `lock_time`. Ignore num_inputs/num_outputs.
+  //       Hint: practice structured bindings or std::tie with `_` placeholders.
+  (void)new_version;
+  (void)num_inputs;
+  (void)num_outputs;
+  (void)new_lock_time;
+  this->version = new_version;
+  this->lock_time = new_lock_time;
 }
 
 // ---- UTXOSet ----------------------------------------------------------------
 
-void UTXOSet::add_utxo(const std::string& tx_id,
-                       uint32_t vout_index,
+void UTXOSet::add_utxo(const std::string &tx_id, uint32_t vout_index,
                        uint64_t amount) {
-    // TODO: construct a UTXO and insert it into `utxos`.
-    (void)tx_id;
-    (void)vout_index;
-    (void)amount;
+  // TODO: construct a UTXO and insert it into `utxos`.
+  (void)tx_id;
+  (void)vout_index;
+  (void)amount;
+  UTXO utxo{tx_id, vout_index, amount};
+  this->utxos.insert(utxo);
 }
 
-bool UTXOSet::remove_utxo(const std::string& tx_id,
-                          uint32_t vout_index,
+bool UTXOSet::remove_utxo(const std::string &tx_id, uint32_t vout_index,
                           uint64_t amount) {
-    // TODO: remove the matching UTXO from `utxos`. Return true if it was present, false otherwise.
-    (void)tx_id;
-    (void)vout_index;
-    (void)amount;
-    return false;
+  // TODO: remove the matching UTXO from `utxos`. Return true if it was present,
+  // false otherwise.
+  (void)tx_id;
+  (void)vout_index;
+  (void)amount;
+  UTXO utxo{tx_id, vout_index, amount};
+  return this->utxos.erase(utxo) == 1;
 }
 
 uint64_t UTXOSet::get_balance() const {
-    // TODO: sum `amount` across every UTXO in `utxos`.
-    return 0;
+  // TODO: sum `amount` across every UTXO in `utxos`.
+  uint64_t total_amount_ = 0;
+  for (const auto &utxo : this->utxos) {
+    total_amount_ += utxo.amount;
+  }
+  return total_amount_;
 }
 
 std::set<UTXO> UTXOSet::find_sufficient_utxos(uint64_t target_amount) const {
-    // TODO: walk `utxos` in order, collecting them until their summed amount
-    //       reaches `target_amount`. Return the collected set, or an empty
-    //       set if the target cannot be met.
-    (void)target_amount;
-    return {};
+  // TODO: walk `utxos` in order, collecting them until their summed amount
+  //       reaches `target_amount`. Return the collected set, or an empty
+  //       set if the target cannot be met.
+  uint64_t total_amount_ = 0;
+  std::set<UTXO> sufficient_utxos;
+  for (const auto &utxo : this->utxos) {
+    total_amount_ += utxo.amount;
+    sufficient_utxos.insert(utxo);
+    if (total_amount_ >= target_amount) {
+      return sufficient_utxos;
+    }
+  }
+  return sufficient_utxos;
 }
 
 std::size_t UTXOSet::get_total_utxo_count() const {
-    // TODO: return the number of UTXOs in `utxos`.
-    return 0;
+  // TODO: return the number of UTXOs in `utxos`.
+  return this->utxos.size();
 }
 
-bool UTXOSet::is_subset_of(const UTXOSet& other) const {
-    // TODO: return true iff every UTXO in `utxos` is also in `other.utxos`.
-    //       Hint: see std::includes in <algorithm>.
-    (void)other;
-    return false;
+bool UTXOSet::is_subset_of(const UTXOSet &other) const {
+  // TODO: return true iff every UTXO in `utxos` is also in `other.utxos`.
+  //       Hint: see std::includes in <algorithm>.
+  (void)other;
+  return std::includes(other.utxos.begin(), other.utxos.end(), this->utxos.begin(), this->utxos.end());
 }
 
-UTXOSet UTXOSet::combine_utxos(const UTXOSet& other) const {
-    // TODO: return a new UTXOSet whose `utxos` is the union of this set's UTXOs and `other.utxos`.
-    //       Hint: std::set_union.
-    (void)other;
-    return {};
+UTXOSet UTXOSet::combine_utxos(const UTXOSet &other) const {
+  // TODO: return a new UTXOSet whose `utxos` is the union of this set's UTXOs
+  // and `other.utxos`.
+  //       Hint: std::set_union.
+  (void)other;
+  UTXOSet result;
+  std::set_union(this->utxos.begin(), this->utxos.end(), other.utxos.begin(), other.utxos.end(), std::inserter(result.utxos, result.utxos.begin()));
+  return result;
 }
 
-UTXOSet UTXOSet::find_common_utxos(const UTXOSet& other) const {
-    // TODO: return a new UTXOSet whose `utxos` is the intersection of this set's UTXOs and `other.utxos`. 
-    //       Hint: std::set_intersection.
-    (void)other;
-    return {};
+UTXOSet UTXOSet::find_common_utxos(const UTXOSet &other) const {
+  // TODO: return a new UTXOSet whose `utxos` is the intersection of this set's
+  // UTXOs and `other.utxos`.
+  //       Hint: std::set_intersection.
+  (void)other;
+  UTXOSet result;
+  std::set_intersection(this->utxos.begin(), this->utxos.end(), other.utxos.begin(), other.utxos.end(), std::inserter(result.utxos, result.utxos.begin()));
+  return result;
 }
 
 // ---- Block header generator -------------------------------------------------
 
 void generate_block_headers(
-    const std::string& prev_block_hash,
-    const std::string& merkle_root,
-    uint32_t timestamp,
-    uint32_t bits,
-    uint32_t start_nonce,
+    const std::string &prev_block_hash, const std::string &merkle_root,
+    uint32_t timestamp, uint32_t bits, uint32_t start_nonce,
     uint32_t max_attempts,
     const std::function<bool(const BlockHeader&)>& on_header) {
     // TODO: starting from `start_nonce`, build a BlockHeader for each nonce and call on_header(header). Stop early if on_header returns false.
